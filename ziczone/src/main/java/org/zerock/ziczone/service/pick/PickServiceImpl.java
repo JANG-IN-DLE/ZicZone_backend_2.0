@@ -2,6 +2,7 @@ package org.zerock.ziczone.service.pick;
 
 import lombok.RequiredArgsConstructor;
 import lombok.extern.log4j.Log4j2;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 import org.zerock.ziczone.domain.PayHistory;
 import org.zerock.ziczone.domain.PickAndScrap;
@@ -13,6 +14,10 @@ import org.zerock.ziczone.domain.member.CompanyUser;
 import org.zerock.ziczone.domain.member.PersonalUser;
 import org.zerock.ziczone.domain.payment.Payment;
 import org.zerock.ziczone.dto.pick.*;
+import org.zerock.ziczone.mapper.PickAndScrapMapper;
+import org.zerock.ziczone.mapper.application.ResumeMapper;
+import org.zerock.ziczone.mapper.job.JobPositionMapper;
+import org.zerock.ziczone.mapper.tech.TechStackMapper;
 import org.zerock.ziczone.repository.PayHistoryRepository;
 import org.zerock.ziczone.repository.PickAndScrapRepository;
 import org.zerock.ziczone.repository.application.*;
@@ -52,34 +57,40 @@ public class PickServiceImpl implements PickService {
     private final CompanyUserRepository companyUserRepository;
     private final PaymentServiceImpl paymentServiceImpl;
 
+    // -------------MyBatis--------------
+    @Autowired
+    private ResumeMapper resumeMapper;
+    @Autowired
+    private TechStackMapper techStackMapper;
+    @Autowired
+    private JobPositionMapper jobPositionMapper;
+    @Autowired
+    private PickAndScrapMapper pickAndScrapMapper;
+
     // (로그인 안되었을때) 메인페이지에서 pickCards 전송
     @Override
     public List<PickCardDTO> getPickCards() {
         // 최신 resume 정보를 포함하는 PersonalUser 리스트를 가져오기
-        List<Resume> latestResumes = resumeRepository.findTop4ByOrderByResumeUpdateDesc();
+        List<Resume> latestResumes = resumeMapper.findTop4ByOrderByResumeUpdateDesc();
 
         return latestResumes.stream().map(resume -> {
             PersonalUser user = resume.getPersonalUser();
 
-            List<String> techNames = techStackRepository.findByPersonalUserPersonalId(user.getPersonalId()).stream()
+            List<String> techNames = techStackMapper.findByPersonalUserPersonalId(user.getPersonalId()).stream()
                     .map(techStack -> techStack.getTech().getTechName())
                     .collect(Collectors.toList());
-
-            List<String> techUrls = techStackRepository.findByPersonalUserPersonalId(user.getPersonalId()).stream()
+            List<String> techUrls = techStackMapper.findByPersonalUserPersonalId(user.getPersonalId()).stream()
                     .map(techStack -> techStack.getTech().getTechUrl())
                     .collect(Collectors.toList());
-
-            List<String> jobNames = jobPositionRepository.findByPersonalUserPersonalId(user.getPersonalId()).stream()
+            List<String> jobNames = jobPositionMapper.findByPersonalUserPersonalId(user.getPersonalId()).stream()
                     .map(jobPosition -> jobPosition.getJob().getJobName())
                     .collect(Collectors.toList());
-
-            List<PickAndScrap> pickAndScraps = pickAndScrapRepository.findByPersonalUser(user);
+            List<PickAndScrap> pickAndScraps = pickAndScrapMapper.findByPersonalUser(user.getPersonalId());
             List<Boolean> scrapList = pickAndScraps.stream().map(PickAndScrap::isScrap).collect(Collectors.toList());
             List<Boolean> pickList = pickAndScraps.stream().map(PickAndScrap::isPick).collect(Collectors.toList());
             List<Long> companyIdList = pickAndScraps.stream()
                     .map(pickAndScrap -> pickAndScrap.getCompanyUser().getCompanyId())
                     .collect(Collectors.toList());
-
             return PickCardDTO.builder()
                     .userId(user.getUser().getUserId())
                     .personalId(user.getPersonalId())
@@ -92,9 +103,9 @@ public class PickServiceImpl implements PickService {
                     .jobName(String.join(",", jobNames))
                     .scrap(scrapList)
                     .pick(pickList)
-//                    .companyId(companyIdList)
                     .resumeUpdate(resume.getResumeUpdate())
                     .build();
+
         }).collect(Collectors.toList());
     }
 
@@ -285,10 +296,6 @@ public class PickServiceImpl implements PickService {
     // (PersonalId로 로그인했을 경우) pickDetailzone 왼쪽 회원정보 가져오는 메서드
     @Override
     public PickPersonalDetailDTO getPickCardsByPersonalId(Long loggedInUserId, Long personalId) {
-        PersonalUser loggedInPersonalUser = personalUserRepository.findByUser_UserId(loggedInUserId);
-        if(loggedInPersonalUser == null) {
-            throw new RuntimeException("personal user not found");
-        }
         PersonalUser personalUser = personalUserRepository.findByPersonalId(personalId);
         if(personalUser == null) {
             throw new RuntimeException("personal user not found");
@@ -303,10 +310,6 @@ public class PickServiceImpl implements PickService {
         List<String> jobNames = jobPositionRepository.findByPersonalUserPersonalId(personalId).stream()
                 .map(jobPosition -> jobPosition.getJob().getJobName())
                 .collect(Collectors.toList());
-        // payHistoryId에 결제한 내역이 있으면 바로 Detail로 들어갈 수 있게 하기 위해
-        // 아 여기서 보내면 안되고 pickzone에서 card호출할때 거기서 보내야지
-        // 지워도 될듯
-        Optional<PayHistory> payHistoryOptional = payHistoryRepository.findByBuyerIdAndSellerId(loggedInPersonalUser.getPersonalId(), personalId);
 
         PickPersonalDetailDTO pickPersonalDetailDTO = PickPersonalDetailDTO.builder()
                 .userId(personalUser.getUser().getUserId())
@@ -417,7 +420,7 @@ public class PickServiceImpl implements PickService {
         PayHistory payHistory = PayHistory.builder()
                 .sellerId(seller.getPersonalId())
                 .buyerId(buyer.getPersonalId())
-                .berryBucket("-50")
+                .berryBucket("-500")
                 .payHistoryContent(openCardDTO.getPayHistoryContent())
                 .payHistoryDate(openCardDTO.getPayHistoryDate())
                 .personalUser(buyer)

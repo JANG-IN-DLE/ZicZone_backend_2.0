@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper
+        PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+        "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="org.zerock.ziczone.mapper.application.ResumeMapper">
+<!--    이력서 update된 시간을 기준으로 최신순으로 4개 추출 -->
+    <select id="findTop4ByOrderByResumeUpdateDesc" resultType="org.zerock.ziczone.domain.application.Resume">
+        SELECT * FROM resume ORDER BY resume_update DESC LIMIT 4
+    </select>
+<!--    개인에게 공개인 이력서만 추출 -->
+    <select id="findAllByPersonalUserIsPersonalVisibleTrueOrderByResumeUpdateDesc" resultType="org.zerock.ziczone.domain.application.Resume">
+        SELECT * FROM resume WHERE is_personal_visible = true ORDER BY resume_update DESC
+    </select>
+</mapper>
